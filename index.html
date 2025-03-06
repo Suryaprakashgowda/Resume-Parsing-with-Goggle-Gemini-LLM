@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Resume Parser</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- jsPDF for PDF generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <style>
+        body {
+            background: linear-gradient(to bottom, #121212, #1E1E1E);
+            color: #E0E0E0;
+            font-family: 'Arial', sans-serif;
+        }
+    </style>
+</head>
+<body class="text-gray-200">
+
+    <!-- Header -->
+    <header class="bg-black text-white py-6 text-center shadow-md">
+        <h1 class="text-3xl font-bold tracking-wide">Resume Parsing with Google Gemini LLM </h1>
+    </header>
+
+    <!-- Resume Template Container -->
+    <div class="max-w-4xl mx-auto bg-gray-900 p-8 mt-8 shadow-lg rounded-lg border border-gray-700">
+        
+        <!-- Upload Section -->
+        <div class="mb-6">
+            <h2 class="text-xl font-semibold border-b-2 border-gray-500 pb-2 mb-4">Upload Resume</h2>
+            <form id="resumeForm" action="/upload_resume" method="post" enctype="multipart/form-data" class="flex flex-col space-y-3">
+                <label class="font-medium">Resume (PDF only):</label>
+                <input type="file" id="resume" name="resume" accept=".pdf" required class="p-2 border rounded w-full bg-gray-800 text-white">
+                <button type="submit" class="bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-600">Upload</button>
+            </form>
+        </div>
+
+        {% if full_name %}
+        <!-- Resume Template -->
+        <div class="p-6 bg-gray-800 rounded-lg border border-gray-700">
+            <h2 class="text-2xl font-semibold text-center text-white mb-4">{{ full_name }}</h2>
+            <p class="text-center text-gray-400">{{ email_address }} | {{ contact_number }} | {{ location }}</p>
+
+            <!-- Resume Sections -->
+            <div class="mt-6 space-y-6">
+                
+                <!-- Skills -->
+                <div class="bg-gray-700 p-4 rounded shadow-md">
+                    <h3 class="text-lg font-semibold text-white border-b pb-2">Technical Skills</h3>
+                    <p class="mt-2 text-gray-300">{{ technical_skills | safe }}</p>
+                </div>
+
+                <!-- Education -->
+                <div class="bg-gray-700 p-4 rounded shadow-md">
+                    <h3 class="text-lg font-semibold text-white border-b pb-2">Education</h3>
+                    <p class="mt-2 text-gray-300">{{ education | safe }}</p>
+                </div>
+
+                <!-- Work Experience -->
+                <div class="bg-gray-700 p-4 rounded shadow-md">
+                    <h3 class="text-lg font-semibold text-white border-b pb-2">Work Experience</h3>
+                    <p class="mt-2 text-gray-300">{{ work_experience | safe }}</p>
+                </div>
+
+                <!-- Certifications -->
+                <div class="bg-gray-700 p-4 rounded shadow-md">
+                    <h3 class="text-lg font-semibold text-white border-b pb-2">Certifications</h3>
+                    <p class="mt-2 text-gray-300">{{ certifications | safe }}</p>
+                </div>
+
+                <!-- Recommended Roles -->
+                <div class="bg-gray-700 p-4 rounded shadow-md">
+                    <h3 class="text-lg font-semibold text-white border-b pb-2">Recommended Job Roles</h3>
+                    <p class="mt-2 text-gray-300">{{ recommended_job_roles | safe }}</p>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex space-x-3 mt-6">
+                <button type="button" id="editButton" class="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600">Edit</button>
+                <button type="button" id="saveButton" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 hidden">Save</button>
+                <button type="button" id="downloadButton" class="bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-600">Download</button>
+            </div>
+
+            <!-- Pie Chart -->
+            <h2 class="text-xl font-semibold border-b-2 border-gray-500 pb-2 mt-8">Resume Analysis</h2>
+            <canvas id="resumeChart" class="mt-4"></canvas>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+        // Edit & Save Functionality
+        const editButton = document.getElementById('editButton');
+        const saveButton = document.getElementById('saveButton');
+        const resumeDetailsForm = document.querySelector('.resumeTemplate');
+        const inputs = resumeDetailsForm ? resumeDetailsForm.querySelectorAll('input, textarea') : [];
+
+        if (editButton && saveButton) {
+            editButton.addEventListener('click', () => {
+                inputs.forEach(input => input.readOnly = false);
+                editButton.classList.add('hidden');
+                saveButton.classList.remove('hidden');
+            });
+
+            saveButton.addEventListener('click', () => {
+                inputs.forEach(input => input.readOnly = true);
+                editButton.classList.remove('hidden');
+                saveButton.classList.add('hidden');
+                alert("Changes saved!");
+            });
+        }
+
+        // Download Resume as PDF
+        document.getElementById('downloadButton')?.addEventListener('click', () => {
+            const pdf = new jsPDF();
+            let y = 10;
+
+            pdf.text('Resume Details', 10, y);
+            y += 10;
+
+            inputs.forEach(input => {
+                pdf.text(`${input.previousElementSibling.innerText}: ${input.value}`, 10, y);
+                y += 10;
+            });
+
+            pdf.save('resume_details.pdf');
+        });
+
+        // Pie Chart Data
+        const pieChartData = {
+            labels: ['Technical Skills', 'Education', 'Work Experience'],
+            datasets: [{
+                label: 'Resume Data Distribution',
+                data: [{{ technical_skills|length }}, {{ education|length }}, {{ work_experience|length }}],
+                backgroundColor: ['#4F46E5', '#34D399', '#F59E0B'],
+            }]
+        };
+
+        // Generate Pie Chart
+        const ctx = document.getElementById('resumeChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'pie',
+            data: pieChartData,
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'bottom' }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
